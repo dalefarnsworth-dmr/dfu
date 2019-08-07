@@ -38,9 +38,9 @@ import (
 	"strings"
 	"time"
 
-	l "github.com/dalefarnsworth/codeplug/debug"
-	"github.com/dalefarnsworth/codeplug/stdfu"
-	"github.com/dalefarnsworth/codeplug/userdb"
+	l "github.com/dalefarnsworth-dmr/debug"
+	"github.com/dalefarnsworth-dmr/stdfu"
+	"github.com/dalefarnsworth-dmr/userdb"
 )
 
 const (

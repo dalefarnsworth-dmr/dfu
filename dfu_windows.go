@@ -28,7 +28,7 @@
 package dfu
 
 import (
-	"github.com/dalefarnsworth/codeplug/stdfu"
+	"github.com/dalefarnsworth-dmr/stdfu"
 )
 
 func New(progressCallback func(progressCounter int) error) (*Dfu, error) {

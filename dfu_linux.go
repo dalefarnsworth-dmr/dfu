@@ -30,7 +30,7 @@ package dfu
 import (
 	"fmt"
 
-	"github.com/dalefarnsworth/codeplug/stdfu"
+	"github.com/dalefarnsworth-dmr/stdfu"
 	"github.com/google/gousb"
 )
 
