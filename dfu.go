@@ -33,12 +33,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	l "github.com/dalefarnsworth-dmr/debug"
 	"github.com/dalefarnsworth-dmr/stdfu"
 	"github.com/dalefarnsworth-dmr/userdb"
 )
@@ -590,7 +588,7 @@ func (dfu *Dfu) writeSPIFlashFrom(address, size int, iRdr io.Reader) error {
 	return nil
 }
 
-func (dfu *Dfu) ReadUsers(file *os.File) error {
+func (dfu *Dfu) ReadMD380Users(writer io.Writer) error {
 	address := 0x100000
 
 	_, err := dfu.init()
@@ -601,30 +599,22 @@ func (dfu *Dfu) ReadUsers(file *os.File) error {
 	progressCallback := dfu.progressCallback
 	dfu.progressCallback = nil
 
-	err = dfu.readSPIFlashTo(address, 1024, file)
+	buf := bytes.NewBuffer(make([]byte, 0, 1024))
+
+	err = dfu.readSPIFlashTo(address, 1024, buf)
 	if err != nil {
 		return wrapError("ReadUsers", err)
 	}
 
-	_, err = file.Seek(0, io.SeekStart)
+	firstLine, err := buf.ReadString('\n')
 	if err != nil {
-		return err
+		return wrapError("ReadUsers", err)
 	}
 
-	reader := bufio.NewReader(file)
-	line, isPrefix, err := reader.ReadLine()
-	if err != nil {
-		return err
-	}
-	if isPrefix {
-		return fmt.Errorf("First line is too long")
-	}
-	u64count, err := strconv.ParseUint(string(line), 10, 32)
-	count := int(u64count) + len(line) + 1
-
-	_, err = file.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
+	u64count, err := strconv.ParseUint(firstLine[:len(firstLine)-1], 10, 32)
+	count := int(u64count) + len(firstLine)
+	if count < 40 || count > 14*1024*1024 {
+		return fmt.Errorf("ReadUsers: bad db size")
 	}
 
 	dfu.progressCallback = progressCallback
@@ -632,7 +622,7 @@ func (dfu *Dfu) ReadUsers(file *os.File) error {
 	dfu.setMaxProgressCount(100)
 	dfu.finalProgress()
 
-	err = dfu.readSPIFlashTo(address, count, file)
+	err = dfu.readSPIFlashTo(address, count, writer)
 	if err != nil {
 		return wrapError("ReadUsers", err)
 	}
@@ -1241,189 +1231,44 @@ func (dfu *Dfu) WriteCodeplug(data []byte) error {
 	return nil
 }
 
-func (dfu *Dfu) WriteUsers(filename string) error {
-	fileInfo, err := os.Stat(filename)
+func (dfu *Dfu) WriteMD380Users(db *userdb.UsersDB) error {
+	_, err := dfu.init()
 	if err != nil {
-		l.Fatalf("os.Stat: %s", err.Error())
+		return wrapError("WriteMD380Users", err)
 	}
 
-	file, err := os.Open(filename)
-	if err != nil {
-		l.Fatalf("WriteUsers: %s", err.Error())
-	}
-	defer file.Close()
+	str := db.String()
+	str = fmt.Sprintf("%d\n", len(str)) + str
 
-	_, err = dfu.init()
+	rdr := strings.NewReader(str)
+	err = dfu.writeSPIFlashFrom(0x100000, len(str), rdr)
 	if err != nil {
-		return wrapError("WriteUsers", err)
-	}
-
-	size := int(fileInfo.Size())
-
-	err = dfu.writeSPIFlashFrom(0x100000, size, file)
-	if err != nil {
-		return wrapError("WriteUsers", err)
+		return wrapError("WriteMD380Users", err)
 	}
 
 	err = dfu.md380Reboot()
 	if err != nil {
-		return wrapError("WriteUsers", err)
+		return wrapError("WriteMD380Users", err)
 	}
 
 	return nil
 }
 
-type uv380User struct {
-	id   int
-	call string
-	rest string
-}
-
-const (
-	MaxUV380Users = 122197
-)
-
-const (
-	idField      = 0
-	callField    = 1
-	nameField    = 2
-	cityField    = 3
-	stateField   = 4
-	nickField    = 5
-	countryField = 6
-)
-
-func ParseUV380Users(reader io.Reader) [][]string {
-	users := make([][]string, 0)
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), ",")
-		if len(fields) != 7 {
-			continue
-		}
-		fields[countryField] = userdb.UnAbbreviateCountry(fields[countryField])
-		fields[stateField] = userdb.UnAbbreviateState(fields[stateField])
-		users = append(users, fields)
-	}
-	if err := scanner.Err(); err != nil {
-		l.Fatalf("ParseUsers: %s", err.Error())
-	}
-
-	return users
-}
-
-func FilterUsers(users [][]string, countryMap map[string]bool) [][]string {
-	filteredUsers := make([][]string, 0)
-	for _, fields := range users {
-		if len(fields) != 7 {
-			continue
-		}
-
-		if countryMap != nil {
-			found, ok := countryMap[fields[countryField]]
-			if ok && !found {
-				continue
-			}
-		}
-
-		filteredUsers = append(filteredUsers, fields)
-	}
-
-	return filteredUsers
-}
-
-func uv380UserImage(userSlice [][]string) []byte {
-	users := make([]uv380User, 0)
-	for _, fields := range userSlice {
-		i64, err := strconv.ParseInt(fields[idField], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		var user uv380User
-
-		user.id = int(i64)
-
-		user.call = fields[1]
-
-		restFields := []string{
-			fields[nameField],
-			fields[nickField],
-			fields[cityField],
-			fields[stateField],
-			fields[countryField],
-		}
-		user.rest = strings.Join(restFields, ",")
-
-		users = append(users, user)
-	}
-
-	if len(users) > MaxUV380Users {
-		users = users[:MaxUV380Users]
-	}
-	nUsers := len(users)
-
-	image := bytes.Repeat([]byte{0xff}, 0x1000000-0x200000)
-
-	image[0] = byte(nUsers >> 16)
-	image[1] = byte(nUsers >> 8)
-	image[2] = byte(nUsers)
-
-	lastHigh12 := -1
-	j := 0
-	for i := range users {
-		user := &users[i]
-		id := user.id
-		high12 := id >> 12
-		if high12 == lastHigh12 {
-			continue
-		}
-		offset := 3 + j*4
-		index := i + 1
-		image[offset] = byte(id >> 16)
-		image[offset+1] = byte(((id >> 8) & 0xf0) | (index >> 16))
-		image[offset+2] = byte(index >> 8)
-		image[offset+3] = byte(index)
-		lastHigh12 = high12
-		j++
-	}
-
-	for i := range users {
-		user := &users[i]
-
-		userOffset := 0x4003 + i*120
-
-		idOffset := userOffset
-		callOffset := userOffset + 4
-		restOffset := userOffset + 20
-
-		image[idOffset] = byte(user.id)
-		image[idOffset+1] = byte(user.id >> 8)
-		image[idOffset+2] = byte(user.id >> 16)
-
-		zeros := bytes.Repeat([]byte{0}, 116)
-		copy(image[callOffset:callOffset+116], zeros)
-
-		copy(image[callOffset:callOffset+15], user.call)
-		copy(image[restOffset:restOffset+99], user.rest)
-	}
-
-	// truncate image to 1KB boundary
-	end := (0x4003 + len(users)*120 + 1023) & ^1023
-
-	return image[:end]
-}
-
-func (dfu *Dfu) WriteUV380Users(users [][]string) error {
-	image := uv380UserImage(users)
-	imageReader := bytes.NewReader(image)
-
-	_, err := dfu.init()
+// this function is also used for writing the MD2017 users
+func (dfu *Dfu) WriteUV380Users(db *userdb.UsersDB) error {
+	image, err := db.UV380Bytes()
 	if err != nil {
 		return wrapError("WriteUV380Users", err)
 	}
 
-	err = dfu.writeFlashFrom(0x200000, len(image), imageReader)
+	rdr := bytes.NewReader(image)
+
+	_, err = dfu.init()
+	if err != nil {
+		return wrapError("WriteUV380Users", err)
+	}
+
+	err = dfu.writeFlashFrom(0x200000, len(image), rdr)
 	if err != nil {
 		return wrapError("WriteUV380Users", err)
 	}
