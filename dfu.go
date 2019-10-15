@@ -836,9 +836,6 @@ func (dfu *Dfu) setMaxProgressCount(max int) {
 		dfu.progressCounter = 0
 		dfu.progressFunc = func() error {
 			dfu.progressCounter += dfu.progressIncrement
-			if dfu.progressCounter > MaxProgress {
-				dfu.progressCounter = MaxProgress
-			}
 
 			return dfu.progressCallback(dfu.progressCounter)
 		}
