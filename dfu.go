@@ -1234,7 +1234,7 @@ func (dfu *Dfu) WriteMD380Users(db *userdb.UsersDB) error {
 		return wrapError("WriteMD380Users", err)
 	}
 
-	str := db.String()
+	str := db.MD380String()
 	str = fmt.Sprintf("%d\n", len(str)) + str
 
 	rdr := strings.NewReader(str)
@@ -1253,14 +1253,11 @@ func (dfu *Dfu) WriteMD380Users(db *userdb.UsersDB) error {
 
 // this function is also used for writing the MD2017 users
 func (dfu *Dfu) WriteUV380Users(db *userdb.UsersDB) error {
-	image, err := db.UV380Bytes()
-	if err != nil {
-		return wrapError("WriteUV380Users", err)
-	}
+	image := db.UV380Image()
 
 	rdr := bytes.NewReader(image)
 
-	_, err = dfu.init()
+	_, err := dfu.init()
 	if err != nil {
 		return wrapError("WriteUV380Users", err)
 	}
