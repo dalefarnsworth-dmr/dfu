@@ -379,7 +379,7 @@ func (dfu *Dfu) sleepMilliseconds(millis int) error {
 		if err != nil {
 			return err
 		}
-		time.Sleep(time.Duration(time.Millisecond))
+		time.Sleep(time.Duration(4 * time.Millisecond))
 	}
 
 	return nil
