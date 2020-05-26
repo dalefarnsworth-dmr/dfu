@@ -24,6 +24,8 @@
 // This code began as a transliteration of the python code found in
 // https://github.com/travisgoodspeed/md380tools.
 
+// +build !windows
+
 // Package dfu implements reading/writing from/to the md380 radio via usb.
 package dfu
 
