@@ -1251,6 +1251,25 @@ func (dfu *Dfu) WriteMD380Users(db *userdb.UsersDB) error {
 	return nil
 }
 
+func (dfu *Dfu) WriteRawMD380Users(rdr io.Reader, size int) error {
+	_, err := dfu.init()
+	if err != nil {
+		return wrapError("WriteRawMD380Users", err)
+	}
+
+	err = dfu.writeSPIFlashFrom(0x100000, size, rdr)
+	if err != nil {
+		return wrapError("WriteRawMD380Users", err)
+	}
+
+	err = dfu.md380Reboot()
+	if err != nil {
+		return wrapError("WriteRawMD380Users", err)
+	}
+
+	return nil
+}
+
 // this function is also used for writing the MD2017 users
 func (dfu *Dfu) WriteUV380Users(db *userdb.UsersDB) error {
 	image := db.UV380Image()
