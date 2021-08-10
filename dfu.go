@@ -1251,6 +1251,29 @@ func (dfu *Dfu) WriteMD380Users(db *userdb.UsersDB) error {
 	return nil
 }
 
+func (dfu *Dfu) WriteMD380IndexedUsers(db *userdb.UsersDB) error {
+	image := db.MD380IndexedImage()
+
+	rdr := bytes.NewReader(image)
+
+	_, err := dfu.init()
+	if err != nil {
+		return wrapError("WriteMD380IndexedUsers", err)
+	}
+
+	err = dfu.writeSPIFlashFrom(0x100000, len(image), rdr)
+	if err != nil {
+		return wrapError("WriteMD380IndexedUsers", err)
+	}
+
+	err = dfu.md380Reboot()
+	if err != nil {
+		return wrapError("WriteMD380IndexedUsers", err)
+	}
+
+	return nil
+}
+
 func (dfu *Dfu) WriteRawMD380Users(rdr io.Reader, size int) error {
 	_, err := dfu.init()
 	if err != nil {
