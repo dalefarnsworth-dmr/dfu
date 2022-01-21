@@ -1320,7 +1320,7 @@ func (dfu *Dfu) WriteUV380Users(db *userdb.UsersDB) error {
 func (dfu *Dfu) WriteFirmware(iRdr io.Reader) error {
 	_, err := dfu.init()
 	if err != nil {
-		return wrapError("WriteCodeplug", err)
+		return wrapError("WriteFirmware", err)
 	}
 
 	return dfu.writeFirmwareFrom(iRdr)
